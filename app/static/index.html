@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Field Service Copilot - Control Tower</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet.js Map Library -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Main Style -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation Header -->
+        <header class="app-header">
+            <div class="header-logo">
+                <i class="fa-solid fa-tower-broadcast logo-icon"></i>
+                <div class="logo-text">
+                    <h1>AEROCORE</h1>
+                    <span>FIELD SERVICE COPILOT</span>
+                </div>
+            </div>
+
+            <!-- Role Configuration Selector -->
+            <div class="role-selector-container">
+                <div class="role-mode-selector">
+                    <button class="role-btn active" id="btn-tech-role" onclick="setRole('Technician')">
+                        <i class="fa-solid fa-helmet-safety"></i> Technician
+                    </button>
+                    <button class="role-btn" id="btn-manager-role" onclick="setRole('Dispatch Manager')">
+                        <i class="fa-solid fa-user-shield"></i> Dispatch Manager
+                    </button>
+                </div>
+                <div class="user-context" id="tech-user-context">
+                    <span class="context-label">Simulating Tech:</span>
+                    <select id="select-tech" onchange="changeActiveTech()">
+                        <!-- Loaded dynamically -->
+                    </select>
+                </div>
+                <div class="user-context hidden" id="manager-user-context">
+                    <span class="context-label">Manager Mode:</span>
+                    <span class="manager-badge">Admin (Dave Miller)</span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <!-- Theme Toggle Switch -->
+                <button class="action-btn-secondary" id="btn-theme-toggle" onclick="toggleTheme()" title="Toggle Light/Dark Theme">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+                <button class="action-btn-secondary" onclick="resetDatabase()" title="Reset State">
+                    <i class="fa-solid fa-rotate-left"></i> Reset Demo
+                </button>
+                <div class="time-widget">
+                    <i class="fa-regular fa-clock"></i>
+                    <span id="current-time">19:00:00 PST</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- KPI Metrics Ribbon -->
+        <section class="kpi-ribbon">
+            <div class="kpi-card" id="kpi-total-jobs">
+                <div class="kpi-icon"><i class="fa-solid fa-briefcase"></i></div>
+                <div class="kpi-data">
+                    <span class="kpi-value">--</span>
+                    <span class="kpi-title">Total Service Jobs</span>
+                </div>
+            </div>
+            <div class="kpi-card" id="kpi-unassigned-jobs">
+                <div class="kpi-icon warning"><i class="fa-solid fa-circle-question"></i></div>
+                <div class="kpi-data">
+                    <span class="kpi-value">--</span>
+                    <span class="kpi-title">Unassigned Jobs</span>
+                </div>
+            </div>
+            <div class="kpi-card" id="kpi-pending-approvals">
+                <div class="kpi-icon danger highlight-glow"><i class="fa-solid fa-envelope-open-text"></i></div>
+                <div class="kpi-data">
+                    <span class="kpi-value">--</span>
+                    <span class="kpi-title">Pending Approvals</span>
+                </div>
+            </div>
+            <div class="kpi-card" id="kpi-active-techs">
+                <div class="kpi-icon success"><i class="fa-solid fa-truck-field"></i></div>
+                <div class="kpi-data">
+                    <span class="kpi-value">--</span>
+                    <span class="kpi-title">Active Field Techs</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Dashboard Workspace -->
+        <main class="dashboard-body">
+            
+            <!-- LEFT PANEL: Entity Lists (Technicians & Jobs) -->
+            <aside class="left-panel">
+                <div class="panel-header">
+                    <div class="tab-selectors">
+                        <button class="tab-btn active" id="tab-btn-techs" onclick="switchLeftTab('techs')">
+                            Technicians
+                        </button>
+                        <button class="tab-btn" id="tab-btn-jobs" onclick="switchLeftTab('jobs')">
+                            Service Jobs
+                        </button>
+                    </div>
+                </div>
+
+                <div class="panel-content">
+                    <!-- Filters and Search -->
+                    <div class="search-filter-box">
+                        <div class="search-input-wrapper">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="entity-search" placeholder="Search..." oninput="handleEntitySearch()">
+                        </div>
+                        <div class="filter-pills" id="tech-filters">
+                            <button class="pill active" onclick="setTechFilter('all')">All</button>
+                            <button class="pill" onclick="setTechFilter('Available')">Available</button>
+                            <button class="pill" onclick="setTechFilter('On Job')">On Job</button>
+                            <button class="pill" onclick="setTechFilter('Delayed')">Delayed</button>
+                        </div>
+                        <div class="filter-pills hidden" id="job-filters">
+                            <button class="pill active" onclick="setJobFilter('all')">All</button>
+                            <button class="pill" onclick="setJobFilter('Assigned')">Assigned</button>
+                            <button class="pill" onclick="setJobFilter('Unassigned')">Unassigned</button>
+                            <button class="pill" onclick="setJobFilter('High')">High Priority</button>
+                        </div>
+                    </div>
+
+                    <!-- List scrollable areas -->
+                    <div class="list-container" id="tech-list-wrapper">
+                        <div class="tech-list" id="tech-list">
+                            <!-- Dynamic Content -->
+                        </div>
+                    </div>
+                    <div class="list-container hidden" id="job-list-wrapper">
+                        <div class="job-list" id="job-list">
+                            <!-- Dynamic Content -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Entity Details Panel -->
+                <div class="details-card hidden" id="entity-details-card">
+                    <div class="details-header">
+                        <h3 id="details-title">Details</h3>
+                        <button class="close-details-btn" onclick="closeDetails()">&times;</button>
+                    </div>
+                    <div class="details-body" id="details-content">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- CENTER PANEL: Interactive Map Control Room -->
+            <section class="center-panel">
+                <div class="map-controls">
+                    <span class="control-title"><i class="fa-solid fa-map-location-dot"></i> Live Operations Map (San Francisco)</span>
+                    <div class="map-legend">
+                        <span class="legend-item"><span class="legend-dot unassigned"></span> Unassigned</span>
+                        <span class="legend-item"><span class="legend-dot assigned"></span> Assigned</span>
+                        <span class="legend-item"><span class="legend-dot delayed"></span> Delayed</span>
+                        <span class="legend-item"><span class="legend-dot completed"></span> Completed</span>
+                    </div>
+                </div>
+                <!-- Leaflet-based interactive map -->
+                <div class="map-wrapper">
+                    <div id="ops-map"></div>
+                    <div class="map-overlay-info" id="map-selection-hint">
+                        Select a technician or job from the list to focus on the map
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT PANEL: Agentic Copilot Chat & Approval Queue -->
+            <aside class="right-panel">
+                <!-- Section 1: Approval Queue -->
+                <div class="approvals-section">
+                    <div class="section-title">
+                        <h3><i class="fa-solid fa-shield-halved"></i> Dispatch Manager Approvals</h3>
+                        <span class="badge" id="approvals-count-badge">0 Pending</span>
+                    </div>
+                    <div class="approvals-list" id="approvals-list">
+                        <!-- Dynamic approvals -->
+                    </div>
+                </div>
+
+                <!-- Section 2: Agent Chat Panel -->
+                <div class="chat-section">
+                    <div class="section-title">
+                        <h3><i class="fa-solid fa-robot"></i> Copilot Assistant</h3>
+                        <span class="status-indicator-dot green"></span>
+                    </div>
+
+                    <!-- Suggested Prompts / Seed Inputs -->
+                    <div class="seed-prompts-container">
+                        <div class="seed-header">Suggested Prompts:</div>
+                        <div class="seed-scroll" id="seed-prompts">
+                            <!-- Dynamic prompts depending on active role -->
+                        </div>
+                    </div>
+
+                    <!-- Chat conversation messages -->
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="message system">
+                            <div class="message-content">
+                                Welcome to Aerocore Field Service Copilot. Use the dropdown/role switcher to toggle permissions. Speak naturally to query status, reassign jobs, or handle exceptions.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat typing indicator -->
+                    <div class="typing-indicator hidden" id="typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        Copilot is processing...
+                    </div>
+
+                    <!-- Chat Input Field -->
+                    <div class="chat-input-area">
+                        <input type="text" id="chat-input" placeholder="Type a message or click a suggestion..." onkeydown="handleChatSubmit(event)">
+                        <button class="send-btn" onclick="submitMessage()" id="btn-send-message">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section 3: Audit Trail -->
+                <div class="audit-section">
+                    <div class="section-title">
+                        <h3><i class="fa-solid fa-receipt"></i> Operation Logs & Audit Trail</h3>
+                    </div>
+                    <div class="audit-log" id="audit-log">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </aside>
+
+        </main>
+    </div>
+
+    <!-- Modal for Approval/Rejection Dialog -->
+    <div class="modal hidden" id="approval-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Review Reassignment Request</h3>
+                <button class="close-modal-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body-content">
+                <!-- Dynamic Request details -->
+            </div>
+            <div class="modal-footer">
+                <input type="text" id="modal-manager-comments" placeholder="Add optional manager comment...">
+                <div class="modal-actions">
+                    <button class="modal-btn reject" id="modal-btn-reject">Reject Request</button>
+                    <button class="modal-btn approve" id="modal-btn-approve">Approve Request</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
