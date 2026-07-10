@@ -57,6 +57,9 @@
                 <button class="action-btn-secondary" id="btn-theme-toggle" onclick="toggleTheme()" title="Toggle Light/Dark Theme">
                     <i class="fa-solid fa-moon"></i>
                 </button>
+                <button class="action-btn-secondary" id="btn-api-key" onclick="openApiKeyModal()" title="Configure Gemini API Key">
+                    <i class="fa-solid fa-key"></i> API Key
+                </button>
                 <button class="action-btn-secondary" onclick="resetDatabase()" title="Reset State">
                     <i class="fa-solid fa-rotate-left"></i> Reset Demo
                 </button>
@@ -268,7 +271,31 @@
             </div>
         </div>
     </div>
-
+    <!-- Modal for Gemini API Key Input -->
+    <div class="modal hidden" id="api-key-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-key"></i> Set Gemini API Key</h3>
+                <button class="close-modal-btn" onclick="closeApiKeyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 12px; font-size: 0.9rem; line-height: 1.4;">
+                    Please provide your own Gemini API Key to enable Copilot features if the default Gemini API Key is invalid or not working.
+                </p>
+                <p style="margin-bottom: 16px; font-size: 0.85rem; padding: 10px; border-radius: 6px; background: rgba(243, 156, 18, 0.1); border-left: 4px solid #f39c12; line-height: 1.4; color: var(--text-main);">
+                    <i class="fa-solid fa-shield-halved" style="color: #f39c12; margin-right: 6px;"></i>
+                    <strong>Privacy & Security:</strong> This Gemini API Key is <strong>not stored in any server</strong> and is <strong>only stored in your local browser storage</strong>.
+                </p>
+                <input type="password" id="modal-gemini-key-input" placeholder="AIzaSy..." style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-family: monospace;">
+            </div>
+            <div class="modal-footer">
+                <div class="modal-actions" style="width: 100%; display: flex; justify-content: flex-end; gap: 8px;">
+                    <button class="modal-btn reject" onclick="closeApiKeyModal()">Cancel</button>
+                    <button class="modal-btn approve" onclick="saveApiKey()">Save Key</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <script src="app.js"></script>
 </body>
 </html>

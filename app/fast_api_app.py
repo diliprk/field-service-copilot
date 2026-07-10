@@ -18,7 +18,7 @@ from collections.abc import AsyncIterator
 
 from a2a.server.tasks import InMemoryTaskStore
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
 from fastapi.staticfiles import StaticFiles
 from google.adk.cli.fast_api import get_fast_api_app
 from google.adk.runners import Runner
@@ -42,6 +42,9 @@ load_dotenv()
 setup_telemetry()
 # Must run before get_fast_api_app to set the tracer provider resource.
 setup_agent_engine_telemetry()
+
+import logging
+local_logger = logging.getLogger("fast_api_app")
 
 # Robust logger fallback
 try:
@@ -175,37 +178,129 @@ def reject_direct_endpoint(req: DirectApprovalRequest) -> dict:
 
 
 @app.post("/api/chat")
-async def chat_endpoint(req: ChatRequest) -> dict:
+async def chat_endpoint(
+    req: ChatRequest,
+    x_gemini_api_key: str | None = Header(default=None)
+) -> dict:
     """Passes user messages to the ADK Copilot runner, injecting user role and tech ID in context."""
     runner = app.state.runner
     session_service = runner.session_service
 
-    # Ensure session is initialized
-    session = await session_service.get_session(
-        app_name=runner.app_name, user_id=req.user_id, session_id=req.session_id
-    )
-    if session is None:
-        session = await session_service.create_session(
+    custom_key_used = False
+    old_use_vertexai = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI")
+    old_use_enterprise = os.environ.get("GOOGLE_GENAI_USE_ENTERPRISE")
+    old_google_api_key = os.environ.get("GOOGLE_API_KEY")
+    old_gemini_api_key = os.environ.get("GEMINI_API_KEY")
+    original_models = {}
+
+    if x_gemini_api_key:
+        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "False"
+        os.environ["GOOGLE_GENAI_USE_ENTERPRISE"] = "False"
+        os.environ["GOOGLE_API_KEY"] = x_gemini_api_key
+        os.environ["GEMINI_API_KEY"] = x_gemini_api_key
+        custom_key_used = True
+        
+        # Recursively clear cached clients and adjust model names on the agent hierarchy
+        def prepare_agents_for_custom_key(agent):
+            if hasattr(agent, "model") and agent.model:
+                for prop in ["api_client", "_api_backend", "_live_api_client"]:
+                    if prop in agent.model.__dict__:
+                        del agent.model.__dict__[prop]
+                model_name = agent.model.model
+                if model_name and model_name.startswith("projects/") and "models/" in model_name:
+                    base_model = model_name.split("models/")[-1]
+                    original_models[id(agent)] = model_name
+                    agent.model.model = base_model
+            if hasattr(agent, "sub_agents") and agent.sub_agents:
+                for sub_agent in agent.sub_agents:
+                    prepare_agents_for_custom_key(sub_agent)
+
+        prepare_agents_for_custom_key(runner.app.root_agent)
+
+    try:
+        # Ensure session is initialized
+        session = await session_service.get_session(
             app_name=runner.app_name, user_id=req.user_id, session_id=req.session_id
         )
-    response_text = ""
-    async for event in runner.run_async(
-        user_id=req.user_id,
-        session_id=req.session_id,
-        new_message=types.Content(
-            role="user", parts=[types.Part.from_text(text=req.message)]
-        ),
-        state_delta={
-            "user:role": req.role,
-            "user:technician_id": req.technician_id,
-        },
-    ):
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    response_text += part.text
+        if session is None:
+            session = await session_service.create_session(
+                app_name=runner.app_name, user_id=req.user_id, session_id=req.session_id
+            )
+        response_text = ""
+        async for event in runner.run_async(
+            user_id=req.user_id,
+            session_id=req.session_id,
+            new_message=types.Content(
+                role="user", parts=[types.Part.from_text(text=req.message)]
+            ),
+            state_delta={
+                "user:role": req.role,
+                "user:technician_id": req.technician_id,
+            },
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        response_text += part.text
 
-    return {"response": response_text}
+        return {"response": response_text}
+
+    except Exception as e:
+        err_msg = str(e)
+        local_logger.error(f"Error executing agent runner: {err_msg}", exc_info=True)
+        
+        # Check if the exception looks like an API Key error
+        is_api_key_error = False
+        if "api key" in err_msg.lower() or "api_key" in err_msg.lower() or "unauthorized" in err_msg.lower() or "invalid_argument" in err_msg.lower() or "apikey" in err_msg.lower() or "not found" in err_msg.lower() or "404" in err_msg.lower():
+            is_api_key_error = True
+        
+        if is_api_key_error:
+            return {
+                "error": "API_KEY_INVALID",
+                "message": "The Gemini API Key is invalid or not working. Please input a valid API Key."
+            }
+        
+        return {
+            "error": "CHAT_ERROR",
+            "message": f"Error running agent: {err_msg}"
+        }
+
+    finally:
+        # Restore original environment variables if overridden
+        if custom_key_used:
+            if old_use_vertexai is not None:
+                os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = old_use_vertexai
+            else:
+                os.environ.pop("GOOGLE_GENAI_USE_VERTEXAI", None)
+                
+            if old_use_enterprise is not None:
+                os.environ["GOOGLE_GENAI_USE_ENTERPRISE"] = old_use_enterprise
+            else:
+                os.environ.pop("GOOGLE_GENAI_USE_ENTERPRISE", None)
+                
+            if old_google_api_key is not None:
+                os.environ["GOOGLE_API_KEY"] = old_google_api_key
+            else:
+                os.environ.pop("GOOGLE_API_KEY", None)
+                
+            if old_gemini_api_key is not None:
+                os.environ["GEMINI_API_KEY"] = old_gemini_api_key
+            else:
+                os.environ.pop("GEMINI_API_KEY", None)
+                
+            # Restore model names and clear cached clients again so they're restored to default on next call
+            def restore_agents(agent):
+                if hasattr(agent, "model") and agent.model:
+                    if id(agent) in original_models:
+                        agent.model.model = original_models[id(agent)]
+                    for prop in ["api_client", "_api_backend", "_live_api_client"]:
+                        if prop in agent.model.__dict__:
+                            del agent.model.__dict__[prop]
+                if hasattr(agent, "sub_agents") and agent.sub_agents:
+                    for sub_agent in agent.sub_agents:
+                        restore_agents(sub_agent)
+
+            restore_agents(runner.app.root_agent)
 
 
 @app.post("/feedback")

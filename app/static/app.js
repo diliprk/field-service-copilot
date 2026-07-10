@@ -68,6 +68,7 @@ window.addEventListener('load', () => {
 
     // Initial load
     fetchState();
+    updateApiKeyButtonState();
     
     // Auto-poll state every 5 seconds to keep the operations screen live
     setInterval(fetchState, 5000);
@@ -660,9 +661,15 @@ async function submitMessage() {
     
     try {
         const sessionId = activeRole === 'Technician' ? `session_${activeTechId}` : 'session_manager';
+        const headers = { 'Content-Type': 'application/json' };
+        const customApiKey = localStorage.getItem('GEMINI_API_KEY');
+        if (customApiKey) {
+            headers['X-Gemini-API-Key'] = customApiKey;
+        }
+
         const response = await fetch('/api/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify({
                 message: text,
                 role: activeRole,
@@ -677,6 +684,17 @@ async function submitMessage() {
         // Hide typing state
         typingIndicator.classList.add('hidden');
         
+        if (data.error === 'API_KEY_INVALID') {
+            addMessage('system', 'System warning: The Gemini API Key is invalid or not working.');
+            openApiKeyModal(text);
+            return;
+        }
+
+        if (data.error === 'CHAT_ERROR') {
+            addMessage('system', 'Error running agent: ' + data.message);
+            return;
+        }
+
         addMessage('agent', data.response);
         
         // Refresh state in case agent tools changed data
@@ -778,5 +796,68 @@ async function handleApprovalSubmit() {
     } catch (err) {
         console.error(err);
         addMessage('system', 'Failed to submit manager approval action.');
+    }
+}
+
+// Gemini API Key Management
+let pendingMessageToRetry = null;
+
+function openApiKeyModal(retryText = null) {
+    pendingMessageToRetry = retryText;
+    const modal = document.getElementById('api-key-modal');
+    const input = document.getElementById('modal-gemini-key-input');
+    
+    // Pre-fill input if there's already a key in localStorage
+    const existingKey = localStorage.getItem('GEMINI_API_KEY');
+    if (existingKey) {
+        input.value = existingKey;
+    } else {
+        input.value = '';
+    }
+    
+    modal.classList.remove('hidden');
+    input.focus();
+}
+
+function closeApiKeyModal() {
+    document.getElementById('api-key-modal').classList.add('hidden');
+    pendingMessageToRetry = null;
+}
+
+function saveApiKey() {
+    const input = document.getElementById('modal-gemini-key-input');
+    const key = input.value.trim();
+    
+    if (key) {
+        localStorage.setItem('GEMINI_API_KEY', key);
+        addMessage('system', 'Gemini API Key saved to browser cache.');
+    } else {
+        localStorage.removeItem('GEMINI_API_KEY');
+        addMessage('system', 'Custom Gemini API Key removed. Using default.');
+    }
+    
+    closeApiKeyModal();
+    updateApiKeyButtonState();
+    
+    // Retry the pending message if there was one
+    if (pendingMessageToRetry) {
+        const textToRetry = pendingMessageToRetry;
+        pendingMessageToRetry = null;
+        // Put the message back in the chat input and submit
+        chatInput.value = textToRetry;
+        submitMessage();
+    }
+}
+
+function updateApiKeyButtonState() {
+    const btn = document.getElementById('btn-api-key');
+    if (!btn) return;
+    const key = localStorage.getItem('GEMINI_API_KEY');
+    if (key) {
+        btn.classList.add('key-active');
+        btn.title = "Gemini API Key Configured (Custom)";
+    } else {
+        btn.classList.remove('key-active');
+        btn.title = "Configure Gemini API Key";
     }
 }

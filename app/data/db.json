@@ -66,9 +66,7 @@
         "cabling"
       ],
       "availability": "On Job",
-      "assigned_job_ids": [
-        "job_2"
-      ]
+      "assigned_job_ids": []
     },
     {
       "id": "tech_3",
@@ -198,8 +196,8 @@
         "lat": 37.78,
         "lng": -122.485
       },
-      "status": "Assigned",
-      "assigned_technician_id": "tech_2",
+      "status": "Unassigned",
+      "assigned_technician_id": null,
       "required_skill": "plumbing",
       "priority": "Medium",
       "time_window": "09:00 - 11:00",
@@ -499,6 +497,13 @@
       "user": "Dispatch Manager",
       "action": "Request Approved",
       "details": "Approved reassignment of Job job_5 from Evan Wright to Alice Vance. Comments: Request approved to Alice Vance reassignment"
+    },
+    {
+      "id": "act_5",
+      "timestamp": "2026-07-10T11:28:17.802960",
+      "user": "Bob Miller",
+      "action": "Self-Unassignment",
+      "details": "Unassigned job job_2 from Bob Miller. Reason: Requesting to unassign job due to personal circumstances."
     }
   ]
 }

@@ -263,3 +263,28 @@ def test_reasoning_engine_stream(server_fixture: subprocess.Popen[str]) -> None:
         for event in events
     )
     assert has_text, "No text content in reasoning_engine events"
+
+
+def test_api_chat_custom_key(server_fixture: subprocess.Popen[str]) -> None:
+    """Test /api/chat with a custom (invalid) API key to verify it returns API_KEY_INVALID error."""
+    logger.info("Starting /api/chat custom key test")
+    chat_url = f"{BASE_URL}/api/chat"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "X-Gemini-API-Key": "invalid_api_key_test_123"
+    }
+    
+    data = {
+        "message": "Hi, what is my schedule?",
+        "role": "Technician",
+        "technician_id": "tech_1",
+        "session_id": f"session_{uuid.uuid4()}",
+        "user_id": "user_tech_1"
+    }
+    
+    response = requests.post(chat_url, headers=headers, json=data, timeout=30)
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json.get("error") == "API_KEY_INVALID"
+    assert "Gemini API Key is invalid" in res_json.get("message")

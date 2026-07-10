@@ -1280,3 +1280,16 @@ body.light-theme .zone-tooltip {
     background: var(--color-secondary);
 }
 
+/* Custom Gemini API Key configuration button style */
+.action-btn-secondary.key-active {
+    color: #34a853 !important;
+    border-color: rgba(52, 168, 83, 0.4) !important;
+    background: rgba(52, 168, 83, 0.08) !important;
+}
+
+.action-btn-secondary.key-active:hover {
+    color: #4cd964 !important;
+    border-color: rgba(52, 168, 83, 0.6) !important;
+    background: rgba(52, 168, 83, 0.12) !important;
+}
+
